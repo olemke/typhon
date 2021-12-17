@@ -226,6 +226,29 @@ def is_compression_format(fmt):
     return fmt in _known_compressions
 
 
+def get_testfiles_directory_from_pooch(subdir):
+    try:
+        import pooch
+    except ImportError:
+        return None
+
+    pooch_data = pooch.create(
+        path=pooch.os_cache("collocation_data"),
+        base_url=f"https://github.com/atmtools/typhon-testfiles/raw/master/{subdir}/",
+        registry=None,
+    )
+
+    from typhon import __path__ as typhonpath
+    registry_file = os.path.join(typhonpath[0], "tests", f"registry-{subdir}.txt")
+
+    pooch_data.load_registry(registry_file)
+
+    for f in pooch_data.registry_files:
+        pooch_data.fetch(f)
+
+    return str(pooch_data.path)
+
+
 def get_testfiles_directory(subdir=None):
     """Return the location of extra test input files.
 
@@ -249,5 +272,6 @@ def get_testfiles_directory(subdir=None):
         testfiles_path = os.path.join(testfiles_path, subdir)
     if os.path.exists(testfiles_path):
         return os.path.realpath(testfiles_path)
-    else:
-        return None
+    elif subdir is not None:
+        return get_testfiles_directory_from_pooch(subdir)
+    return None
