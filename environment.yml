@@ -26,3 +26,4 @@ dependencies:
         - xarray>=0.10.2
 channels:
         - conda-forge
+        - nodefaults
