@@ -156,7 +156,8 @@ class RetrievalProduct:
             "coefs": {
                 attr: copy.deepcopy(getattr(model, attr))
                 for attr in model.__dir__()
-                if not attr.startswith("__") and attr.endswith("_")
+                if not attr.startswith("__") and attr.endswith("_") # does not exclude anything?
+                if not attr.startswith("_repr_") # added by L.K.
             }
         }
 

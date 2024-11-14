@@ -212,7 +212,7 @@ class SPAREICE:
         # To optimize the results, we try different hyper parameters by
         # using a grid search
         hidden_layer_sizes = [
-            (15, 10, 3),
+            (15, 10, 3), 
             #(50, 20),
         ]
         hyper_parameter = [
@@ -465,7 +465,9 @@ class SPAREICE:
 
             # We do not need the depth of the oceans (this would just
             # confuse the ANN):
-            return_data["elevation"][return_data.elevation < 0] = 0
+                
+            #return_data["elevation"][return_data.elevation < 0] = 0 #previously: SettingWithCopyWarning:  A value is trying to be set on a copy of a slice from a DataFrame
+            return_data.loc[return_data.elevation <0, "elevation"]=0 #new (added)
 
         return return_data
 
@@ -482,7 +484,6 @@ class SPAREICE:
             A pandas DataFrame object with the retrieved IWP and ice cloud
             flag.
         """
-
         # Retrieve the ice water path:
         retrieved = self.iwp.retrieve(data[self.iwp.inputs])
         if not as_log10 and retrieved is not None:
@@ -531,15 +532,18 @@ class SPAREICE:
             "description": "True if pixel contains an ice cloud (retrieved"
                            " by SPARE-ICE)."
         }
+        collocations=collocations.to_xarray() # added on 23.05.23
         retrieved["lat"] = collocations["lat"]
         retrieved["lon"] = collocations["lon"]
         retrieved["time"] = collocations["time"]
         retrieved["scnpos"] = collocations["mhs_scnpos"]
-
+        # let index start with 1 (in accordance with scnline)
+        retrieved["index"]= retrieved["index"]+1 # added on 23.05.23
         return retrieved
 
     def retrieve_from_collocations(
-            self, inputs, output, start=None, end=None, processes=None
+            self, inputs, output, start=None, end=None, processes=None,
+            no_files_error=True, # added on 04.05.2023
     ):
         """Retrieve SPARE-ICE from collocations between MHS and AVHRR
 
@@ -576,14 +580,15 @@ class SPAREICE:
         if "elevation" in self.inputs and self.elevation_grid is None:
             raise ValueError("You have to pass a elevation file via init!")
 
-        timer = Timer.start()
+        #timer = Timer.start() # von mir ausgeklammert: eigtl. muesste das gehen laut Anleitung. Type Error: start() missing 1 required positional argument: 'self'
         if isinstance(inputs, Collocations):
             # Simply apply a map function to all files from these collocations
             inputs.map(
                 SPAREICE._retrieve_from_collocations, kwargs={
                     "spareice": self,
                 }, on_content=True, pass_info=True, start=start, end=end,
-                max_workers=processes, output=output, worker_type="process"
+                max_workers=processes, output=output, worker_type="process",
+                no_files_error=no_files_error # added 04.05.2023
             )
         elif len(inputs) == 2:
             # Collocate MHS and AVHRR on-the-fly:
@@ -611,7 +616,7 @@ class SPAREICE:
                 "You need to pass a Collocations object or a list with a MHS "
                 "and AVHRR fileset!"
             )
-        logger.info(f"Took {timer} hours to retrieve SPARE-ICE")
+        # logger.info(f"Took {timer} hours to retrieve SPARE-ICE") # von mir ausgeklammert
 
     def score(self, data):
         """Calculate the score of SPARE-ICE on testing data
@@ -720,15 +725,16 @@ class SPAREICE:
                 subdirectory named `experiment` will be created there. All
                 plots are stored to it.
             experiment: A name for the experiment as a string. Will be included
-                in the title of the plots and used as name for the subdirectory
-                in `output_dir`.
+                in the title of the plots 
+                # and used as name for the subdirectory
+                in `output_dir`. # UPDATE 27.10.22: the subdirectory name has to be given in output_dir
             data: A pandas.DataFrame object with the required input fields.
 
         Returns:
             None
         """
         # Create the output directory:
-        output_dir = join(output_dir, experiment)
+        #output_dir = join(output_dir, experiment) # UPDATE 27.10.22: excluded to separate subdirectory folder from experiment
         os.makedirs(output_dir, exist_ok=True)
 
         # Run SPARE-ICE!
@@ -750,15 +756,20 @@ class SPAREICE:
             cmap="density", vmin=5,
         )
         scat.cmap.set_under("w")
+     
+        # for framing
+        ax.spines['top'].set_visible(True)
+        ax.spines['right'].set_visible(True)
+        
         ax.set_xlabel("log10 IWP (2C-ICE) [g/m^2]")
         ax.set_ylabel("log10 IWP (SPARE-ICE) [g/m^2]")
         ax.set_title(experiment)
-        fig.colorbar(scat, label="Number of points")
-        fig.savefig(join(output_dir, "2C-ICE-SPAREICE_heatmap.png"))
+        fig.colorbar(scat, label="\nNumber of points")
+        fig.savefig(join(output_dir, "2C-ICE-SPAREICE_heatmap.pdf"))#jpg"),  bbox_inches='tight', dpi=120)
 
         self._plot_scatter(
             experiment,
-            join(output_dir, "2C-ICE-SPAREICE_scatter_{area}.png"),
+            join(output_dir, "2C-ICE-SPAREICE_scatter_{area}.pdf"),#jpg"),
             test.iwp, retrieved.iwp, test.sea_mask.values
         )
 
@@ -773,7 +784,7 @@ class SPAREICE:
                 - 1
         )
         self._plot_error(
-            experiment, join(output_dir, "2C-ICE-SPAREICE_mfe.png"),
+            experiment, join(output_dir, "2C-ICE-SPAREICE_mfe.pdf"),#jpg"),
             test,
             fe, test.sea_mask.values,
         )
@@ -781,10 +792,10 @@ class SPAREICE:
         # Plot the bias:
         bias = retrieved.iwp.values - test.iwp.values
         self._plot_error(
-            experiment, join(output_dir, "2C-ICE-SPAREICE_bias.png"),
+            experiment, join(output_dir, "2C-ICE-SPAREICE_bias.pdf"),#jpg"),
             test,
             bias, test.sea_mask.values,
-            mfe=False, yrange=[-0.35, 0.45],
+            mfe=False, #yrange=[-0.35, 0.45],
         )
 
         # self._plot_weights(
@@ -814,11 +825,16 @@ class SPAREICE:
                 xdata[mask], ydata[mask],
                 s=1, alpha=0.6
             )
+            
+            # for framing
+            ax.spines['top'].set_visible(True)
+            ax.spines['right'].set_visible(True)
+
             ax.grid()
             ax.set_xlabel("log10 IWP (2C-ICE) [g/m^2]")
             ax.set_ylabel("log10 IWP (SPARE-ICE) [g/m^2]")
             ax.set_title(f"{experiment} - {area}")
-            fig.savefig(file.format(area=area))
+            fig.savefig(file.format(area=area), bbox_inches='tight')
 
     @staticmethod
     def _plot_error(
@@ -831,10 +847,11 @@ class SPAREICE:
 
         if mfe:
             ax.set_ylabel("Median fractional error [%]")
-            ax.set_ylim([0, 200])
             statistic = "median"
         else:
             ax.set_ylabel("$\Delta$ IWP (SPARE-ICE - 2C-ICE) [log 10 g/m^2]")
+            plt.hlines(0, xrange[0], xrange[1], color='red', linewidth=2)
+            ax.set_xlim(xrange)
             statistic = "mean"
 
         for hemisphere in ["global"]:
@@ -857,15 +874,19 @@ class SPAREICE:
                     range=xrange, pargs={"marker": "o",
                                          "label": f"{area} - {hemisphere}"}
                 )
-
+        
         ax.set_xlabel(xlabel)
         ax.grid()
         ax.legend(fancybox=True)
         ax.set_title(f"Experiment: {experiment}")
+        if mfe:  ax.set_ylim(ymin=0)
         if yrange is not None:
             ax.set_ylim(yrange)
-        fig.tight_layout()
-        fig.savefig(file)
+           
+        ax.set_xlim(xrange)
+        
+        #fig.tight_layout()
+        fig.savefig(file,  bbox_inches='tight', dpi=120)
 
     def _plot_weights(self, title, file, layer_index=0, vmin=-5, vmax=5):
         import seaborn as sns
@@ -889,17 +910,18 @@ class SPAREICE:
         f.tight_layout()
         f.savefig(file)
 
-    def _report_ice_cloud(self, output_dir, experiment, test, retrieved):
+    def _report_ice_cloud_old(self, output_dir, experiment, test, retrieved): # added: re-written 31.05.2022
         # Confusion matrix:
         fig, ax = plt.subplots(figsize=(12, 10))
         cm = confusion_matrix(test.ice_cloud, retrieved.ice_cloud)
+        
         img = self._plot_matrix(cm, classes=["Yes", "No"], normalize=True)
-        fig.colorbar(img, label="probability")
+        fig.colorbar(img, label="\nprobability")
         ax.set_title("Ice Cloud Classifier - Performance")
         ax.set_ylabel('real ice cloud')
         ax.set_xlabel('predicted ice cloud')
-        fig.tight_layout()
-        fig.savefig(join(output_dir, "ice-cloud-confusion-matrix.png"))
+        #fig.tight_layout()
+        fig.savefig(join(output_dir, "ice-cloud-confusion-matrix.jpg"))
 
         fig, ax = plt.subplots(figsize=(12, 10))
         ax.barh(
@@ -911,7 +933,56 @@ class SPAREICE:
         ax.set_xlabel("Feature Importance")
         ax.set_ylabel("Feature")
         ax.set_title("Ice Cloud Classifier - Importance")
-        fig.savefig(join(output_dir, "ice-cloud-feature-importance.png"))
+        fig.savefig(join(output_dir, "ice-cloud-feature-importance.jpg"))
+        
+        
+        
+    def _report_ice_cloud(self, output_dir, experiment, test, retrieved,normalize=True, **kwargs):
+        from seaborn import heatmap
+        
+        # ice-cloud confusion matrix        
+        cm = confusion_matrix(test.ice_cloud, retrieved.ice_cloud, labels=[1,0])
+                
+        if normalize:
+            cmsum=cm.sum(axis=1)[:, np.newaxis]
+            cmsum=np.where(cmsum==0,1,cmsum) # added to prevent RuntimeWarning: invalid value encountered in true_divide
+            cm = cm.astype('float') / cmsum
+            
+            fmt_prob=".2f"#"%"
+            kwargs["vmin"]=0
+            kwargs["vmax"]=1
+        else:
+            fmt_prob="d"
+         
+        default_kwargs = {
+             "cmap": "Blues",
+             **kwargs }            
+    
+        fig,ax= plt.subplots(figsize=(12, 10))
+        ax=heatmap(cm, annot=True, cbar=True, cbar_kws={"label":"Probability"},
+                square=True,fmt=fmt_prob,
+                **default_kwargs)
+        ax.set_title("Ice Cloud Classifier - Performance")
+        ax.set_ylabel('Real ice cloud')
+        ax.set_xlabel('Predicted ice cloud')
+        ax.xaxis.set_ticklabels(['Yes','No'])
+        ax.yaxis.set_ticklabels(['Yes','No'])
+        fig.savefig(join(output_dir, "ice-cloud-confusion-matrix.pdf"))#jpg"), bbox_inches='tight', dpi=120)
+        
+        # ice-cloud feature importannce'
+        fig, ax = plt.subplots(figsize=(12, 10))
+        print(self.ice_cloud.estimator.feature_importances_)
+        ax.barh(
+            np.arange(len(self.ice_cloud.inputs)),
+            self.ice_cloud.estimator.feature_importances_
+        )
+        ax.set_yticks(np.arange(len(self.ice_cloud.inputs)))
+        ax.set_yticklabels(self.ice_cloud.inputs)
+        ax.set_xlabel("Feature Importance")
+        ax.set_ylabel("Feature")
+        ax.set_title("Ice Cloud Classifier - Importance")
+        fig.savefig(join(output_dir, "ice-cloud-feature-importance.pdf"))#jpg"), bbox_inches='tight', dpi=120)
+        
 
     @staticmethod
     def _plot_matrix(

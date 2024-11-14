@@ -195,8 +195,11 @@ class Collocator:
         # Find the files from both filesets which overlap tempoerally.
         matches = list(filesets[0].match(
             filesets[1], start=start, end=end, max_interval=max_interval,
+            skip_file_errors=skip_file_errors # skip_file_errors added 22.02.2023
         ))
-
+        if len(matches) == 0:#added  22.02.2023
+            return
+        
         if processes is None:
             processes = 1
 
@@ -539,8 +542,152 @@ class Collocator:
             filesets[1], matches=matches, return_info=True, compact=False,
             skip_errors=skip_file_errors,
         )
+        #####################
+        
+        # correction 27.06.23
+        for iprimary in range(len(matches)):
+            nfound_secondaries=len(matches[iprimary][1])
+            got_matches=[next(loaded_matches) for isecondary in range(nfound_secondaries)]
 
+            # Get FileInfos
+            primary_infos=got_matches[0][0][0]
+            secondaries_infos = [nmatch[1][0] for nmatch in got_matches]
+            files = primary_infos, secondaries_infos
+            # Get datasets
+            primary = got_matches[0][0][1].copy()
+            secondaries = [nmatch[1][1].copy() for nmatch in got_matches]
 
+            # Combine secondary files
+            secondary = xr.concat(secondaries, dim=secondaries[0].time.dims[0])
+
+            # Update dimension numbering
+            secondary[secondary.time.dims[0]] = np.arange(len(secondary.time))
+
+            self._debug(f"Collocate {files[0].path}\nwith {[file.path for file in files[1]]}")
+            
+            collocations = self.collocate(
+                    (filesets[0].name, primary),
+                    (filesets[1].name, secondary), **kwargs,
+                )
+
+            if collocations is None:
+                self._debug("Found no collocations!")
+                # At least, give the process caller a progress update:
+                yield None, None 
+
+            else: # after yield the code continues at the next line
+
+                # Check whether the collocation data is compatible and was build
+                # correctly
+                check_collocation_data(collocations)
+
+                found = [
+                    collocations[f"{filesets[0].name}/time"].size,
+                    collocations[f"{filesets[1].name}/time"].size
+                ]
+
+                self._debug(
+                    f"Found {found[0]} ({filesets[0].name}) and "
+                    f"{found[1]} ({filesets[1].name}) collocations"
+                )
+
+                # Add the names of the processed files:
+                for f in range(2):
+                    if f"{filesets[f].name}/__file" in collocations.variables:
+                        continue
+                    if f == 0:
+                        collocations[f"{filesets[f].name}/__file"] = files[f].path
+                    else: 
+                        collocations[f"{filesets[f].name}/__file"] = \
+                            '::'.join([file.path for file in files[1]])
+
+                # Collect the attributes of the input files. The attributes get a
+                # prefix, primary or secondary, to allow not-unique names.
+                # As representative for the combined secondary files, the file attributes
+                # from the first secondary file are taken.
+                attributes = {
+                    f"primary.{p}" if f == 0 else f"secondary.{p}": v
+                    for f, file in enumerate([files[0], files[1][0]])
+                    for p, v in file.attr.items()
+                }
+
+                yield collocations, attributes
+
+        #  end correction 27.06.23
+        #####################
+        '''
+        #####################
+        
+        # correction 29.05.23
+        got_matches = [loaded_match for loaded_match in loaded_matches] # alternative: list(loaded_matches)
+
+        primary_info=got_matches[0][0][0]
+        primary_infos = got_matches[0][0][0]
+        secondaries_infos = [nmatch[1][0] for nmatch in got_matches]
+        files = primary_infos, secondaries_infos
+
+        primary = got_matches[0][0][1].copy()
+        secondaries = [nmatch[1][1].copy() for nmatch in got_matches]
+
+        # Combine secondary files
+        secondary = xr.concat(secondaries, dim=secondaries[0].time.dims[0])
+        # Update dimension numbering
+        secondary[secondary.time.dims[0]] = np.arange(len(secondary.time))
+
+        self._debug(f"Collocate {files[0].path}\nwith {[file.path for file in files[1]]}")
+        
+        collocations = self.collocate(
+                (filesets[0].name, primary),
+                (filesets[1].name, secondary), **kwargs,
+            )
+
+        if collocations is None:
+            self._debug("Found no collocations!")
+            # At least, give the process caller a progress update:
+            yield None, None 
+
+        else: # after yield the code continues at the next line
+
+            # Check whether the collocation data is compatible and was build
+            # correctly
+            check_collocation_data(collocations)
+
+            found = [
+                collocations[f"{filesets[0].name}/time"].size,
+                collocations[f"{filesets[1].name}/time"].size
+            ]
+
+            self._debug(
+                f"Found {found[0]} ({filesets[0].name}) and "
+                f"{found[1]} ({filesets[1].name}) collocations"
+            )
+
+            # Add the names of the processed files:
+            for f in range(2):
+                if f"{filesets[f].name}/__file" in collocations.variables:
+                    continue
+                if f == 0:
+                    collocations[f"{filesets[f].name}/__file"] = files[f].path
+                else: 
+                    collocations[f"{filesets[f].name}/__file"] = \
+                        '::'.join([file.path for file in files[1]])
+
+            # Collect the attributes of the input files. The attributes get a
+            # prefix, primary or secondary, to allow not-unique names.
+            # As representative for the combined secondary files, the file attributes
+            # from the first secondary file are taken.
+            attributes = {
+                f"primary.{p}" if f == 0 else f"secondary.{p}": v
+                for f, file in enumerate([files[0], files[1][0]])
+                for p, v in file.attr.items()
+            }
+
+            yield collocations, attributes
+
+        #  end correction 29.05.23
+        #####################
+        '''
+        '''
         for loaded_match in loaded_matches:
             # The FileInfo objects of the matched files:
             files = loaded_match[0][0], loaded_match[1][0]
@@ -593,7 +740,7 @@ class Collocator:
             }
 
             yield collocations, attributes
-
+        '''
 
     def collocate(
             self, primary, secondary, max_interval=None, max_distance=None,
@@ -735,6 +882,12 @@ class Collocator:
 
 
         """
+        # the datasets must be sorted first by time in case an input file is unsorted; added 07.03.23
+        if isinstance(primary, tuple):
+            primary = (primary[0], primary[1].sortby("time"))
+        if isinstance(primary, tuple):
+            secondary = (secondary[0], secondary[1].sortby("time"))
+        
         if max_distance is None and max_interval is None:
             raise ValueError(
                 "Either max_distance or max_interval must be given!"
@@ -910,7 +1063,7 @@ class Collocator:
             if not primary_period.size or not secondary_period.size:
                 return None, None
 
-            # We need everything sorted by the time, otherwise xarray's stack
+            # We need everything sorted by the time, otherwise xarray's stack (typo?: sel)
             # method makes problems:
             primary_period = primary_period.sortby(primary_period)
             primary_dim = primary_period.dims[0]
@@ -951,6 +1104,25 @@ class Collocator:
         # very annoying bug in time retrieving
         # (https://github.com/pydata/xarray/issues/1240), this is a
         # little bit cumbersome:
+
+        # Approach which can handle NaT values: # replaced / added 29.05.23; 
+        # added after concatenate was introduced
+        common_start = max(
+            start,
+            pd.to_datetime(primary.time.values).min().tz_localize(None) - max_interval,
+            pd.to_datetime(secondary.time.values).min().tz_localize(None) - max_interval
+        )
+        common_end = min(
+            end,
+            pd.to_datetime(primary.time.values).max().tz_localize(None) + max_interval,
+            pd.to_datetime(secondary.time.values).max().tz_localize(None) + max_interval
+        )
+        # print(pd.to_datetime(primary.time.values).min().tz_localize(None) - max_interval)
+        # print(pd.to_datetime(secondary.time.values).min().tz_localize(None) - max_interval)
+        # print(pd.to_datetime(primary.time.values).max().tz_localize(None) + max_interval)
+        # print(pd.to_datetime(secondary.time.values).max().tz_localize(None) + max_interval)
+
+        '''
         common_start = max(
             start,
             pd.Timestamp(primary.time.values.min().item(0)).tz_localize(None) - max_interval,
@@ -961,6 +1133,11 @@ class Collocator:
             pd.Timestamp(primary.time.values.max().item(0)).tz_localize(None) + max_interval,
             pd.Timestamp(secondary.time.values.max().item(0)).tz_localize(None) + max_interval
         )
+        print(pd.Timestamp(primary.time.values.min().item(0)).tz_localize(None))
+        print(pd.Timestamp(secondary.time.values.min().item(0)).tz_localize(None))
+        print(pd.Timestamp(primary.time.values.max().item(0)).tz_localize(None))
+        print(pd.Timestamp(secondary.time.values.max().item(0)).tz_localize(None))
+        '''
 
         primary_period = primary.time.where(
             (primary.time.values >= np.datetime64(common_start))
@@ -971,6 +1148,9 @@ class Collocator:
             (secondary.time.values >= np.datetime64(common_start))
             & (secondary.time.values <= np.datetime64(common_end))
         ).dropna(secondary.time.dims[0])
+
+        # print('primary_period', primary_period.values)
+        # print('secondary_period', secondary_period.values)
 
         return primary_period, secondary_period
 
@@ -1226,7 +1406,6 @@ class Collocator:
             self._bin_pairs(start, chunk, primary, secondary, max_interval)
             for start, chunk in primary.groupby(pd.Grouper(freq=bin_duration))
         )
-
         # Add arguments to the bins (we need them for the spatial search
         # function):
         bins_with_args = (
@@ -1277,6 +1456,7 @@ class Collocator:
         offset1 = primary.index.searchsorted(chunk1_start)
         offset2 = secondary.index.searchsorted(chunk2_start)
         chunk2 = secondary.loc[chunk2_start:chunk2_end]
+
         return offset1, chunk1, offset2, chunk2
 
     @staticmethod

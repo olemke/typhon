@@ -323,8 +323,16 @@ def gridded_mean(lat, lon, data, grid):
     """
     grid_sum, _, _ = np.histogram2d(lat, lon, grid, weights=data)
     grid_number, _, _ = np.histogram2d(lat, lon, grid)
-
-    return grid_sum / grid_number, grid_number
+    
+    # correction of Johns code before 16.03.2023:
+    '''
+    grid_number_nozeros=np.where(grid_number==0,np.nan,grid_number) # added, to prevent problem in true divide
+    return grid_sum / grid_number_nozeros, grid_number     #-> worst case (nan,0)
+    '''
+    # adjusted 16.03.2023:
+    grid_number_nozeros=np.where(grid_number==0, -9999, grid_number)
+    gridded_mean=np.where(grid_number_nozeros==-9999, 0, grid_sum / grid_number_nozeros)
+    return gridded_mean, grid_number
 
 
 def sea_mask(lat, lon, mask):

@@ -118,6 +118,8 @@ class Collocations(FileSet):
             return data
         elif self.read_mode == "collapse" or self.read_mode is None:
             # Collapse the data (default)
+            if self.read_mode is None:     # added 28.11.22
+                print('default read_mode is collapse')
             return collapse(data, self.reference, self.collapser)
         elif self.read_mode == "expand":
             # Expand the data
@@ -211,7 +213,6 @@ class Collocations(FileSet):
         collocated_files = collocator.collocate_filesets(
             filesets, output=self, **kwargs
         )
-
         timer = Timer().start()
         for _ in collocated_files:
             pass
@@ -220,8 +221,8 @@ class Collocations(FileSet):
 
 def _rows_for_secondaries(primary):
     """Helper function for collapse"""
-    current_row = np.zeros(primary.size, dtype=int)
-    rows = np.zeros(primary.size, dtype=int)
+    current_row = np.zeros(primary.size, dtype=np.int64)
+    rows = np.zeros(primary.size, dtype=np.int64)
     i = 0
     for p in primary:
         rows[i] = current_row[p]
@@ -336,8 +337,8 @@ def collapse(data, reference=None, collapser=None):
     if collapser is None:
         collapser = {}
     collapser = {
-        "mean": lambda m, a: np.nanmean(m, axis=a),
-        "std": lambda m, a: np.nanstd(m, axis=a),
+        "mean": lambda m, a: np.nanmean(m, axis=a), # if slice consists solely of nans, prints RuntimeWarning, but returns nan as desired
+        "std": lambda m, a: np.nanstd(m, axis=a), # if sclice consists solely of nans, prints RuntimeWarning, but returns nan as desired
         "number": lambda m, a: np.count_nonzero(~np.isnan(m), axis=a),
         **collapser,
     }
@@ -394,7 +395,15 @@ def collapse(data, reference=None, collapser=None):
         # ignore them (won't be copied to the resulting dataset):
         if local_name in ("time", "lat", "lon") or local_name.startswith("__"):
             continue
-
+        
+        ####NEW 
+        #if group != reference and local_name in ("time", "lat", "lon"):
+        #    collapsed[local_name] = var_data
+        #    print('****************************')
+            
+        #if local_name.startswith("__"):
+        #    continue
+        #####
         # The dimensions of the binner matrix:
         binner_dims = [
             np.max(rows_in_bins) + 1,

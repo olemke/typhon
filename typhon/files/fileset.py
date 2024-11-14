@@ -20,10 +20,12 @@ import shutil
 from sys import platform
 import traceback
 import warnings
+import tempfile
 
 import numpy as np
 import pandas as pd
 from fsspec.implementations.local import LocalFileSystem
+from pathlib import Path
 
 import typhon.files
 from typhon.trees import IntervalTree
@@ -1049,10 +1051,11 @@ class FileSet:
             bundle=None, filters=None, no_files_error=True,
     ):
         """ Find all files of this fileset in a given time period.
-
-        The *start* and *end* parameters build a semi-open interval: only the
-        files that are equal or newer than *start* and older than *end* are
-        going to be found.
+        
+        The *start* and *end* parameters build a closed interval: only the
+        files that are equal or newer than *start* and equal or older than *end* are
+        going to be found. (updated 09.03.2023)
+        
 
         While searching this method checks whether the file lies in the time
         periods given by `exclude` while initializing.
@@ -1114,9 +1117,13 @@ class FileSet:
         # The user can give strings instead of datetime objects:
         start = datetime.min if start is None else to_datetime(start)
         end = datetime.max if end is None else to_datetime(end)
-
+        '''
         # We want to have a semi-open interval as explained in the doc string.
+        # Update 09.03.2023: We want a closed interval just like in collocate() -> _get_common_time_period
+        # to be consistent
         end -= timedelta(microseconds=1)
+        '''
+    
 
         if end < start:
             raise ValueError(
@@ -1221,8 +1228,8 @@ class FileSet:
             yield from self._prepare_find_return(
                 return_files, sort, only_path, bundle
             )
-        except StopIteration as err:
-            raise NoFilesError(self, start, end)
+        except StopIteration as err: # adjusted 21.02.2023
+                raise NoFilesError(self, start, end)
 
     def _get_search_dirs(self, start, end, white_list):
         """Yields all searching directories for a time period.
@@ -1635,8 +1642,8 @@ class FileSet:
 
         # Using the handler for getting more information
         if retrieve_via in ("handler", "both"):
-            with typhon.files.decompress(info.path, tmpdir=self.temp_dir) as \
-                    decompressed_path:
+            with typhon.files.decompress(info.path, tmpdir=self.temp_dir, target=Path(info.path).name+next(tempfile._get_candidate_names())) as \
+                    decompressed_path: # modified 14.02.2023
                 decompressed_file = info.copy()
                 decompressed_file.path = decompressed_path
                 handler_info = self.handler.get_info(decompressed_file)
@@ -1870,12 +1877,15 @@ class FileSet:
                 #worker_initializer, worker_initargs,
                 return_info, error_to_warning, **find_kwargs
             )
-
+       # print(__name__) # is typhon.files.fileset, not __main__
+        # if __name__ == '__main__': # added 04.10.2022 -> find a way to protect the entry point...
+        #if __name__ == 'typhon.files.fileset':
         with pool_class(**pool_args) as pool:
             # Process all found files with the arguments:
             return list(pool.map(
                 self._call_map_function, worker_args,
             ))
+        
 
     def imap(self, *args, **kwargs):
         """Apply a function on files and return the result immediately
@@ -2019,6 +2029,7 @@ class FileSet:
             try:
                 # file_info could be a bundle of files
                 if isinstance(file_info, FileInfo):
+                    print(file_info)
                     file_content = fileset.read(file_info, **read_args)
                 else:
                     file_content = \
@@ -2071,7 +2082,7 @@ class FileSet:
 
     def match(
             self, other, start=None, end=None, max_interval=None,
-            filters=None, other_filters=None):
+            filters=None, other_filters=None, skip_file_errors=False): # skip_file_errors added 22.02.2023
         """Find matching files between two filesets
 
         Matching files are files that overlap each in their time coverage.
@@ -2097,18 +2108,39 @@ class FileSet:
         Examples:
             TODO: Add example
         """
+
+        ###########################
+        # modified 29.05.23: modificatin: files1 are only searched for within start and end 
+        # without considering max_interval
+        
+        start=to_datetime(start)
+        end=to_datetime(end)
+        if max_interval is not None:
+            max_interval = to_timedelta(max_interval, numbers_as="seconds")
+            start_extended=start-max_interval
+            end_extended=end+max_interval
+
+        files1 = list(
+            self.find(start, end, filters=filters, no_files_error=not(skip_file_errors)) #skip_file_errors added 22.02.2023
+        )
+
+        files2 = list(
+            other.find(start_extended, end_extended, filters=other_filters, no_files_error=not(skip_file_errors)) #skip_file_errors added 22.02.2023
+        )
+
+        '''
         if max_interval is not None:
             max_interval = to_timedelta(max_interval, numbers_as="seconds")
             start = to_datetime(start) - max_interval
             end = to_datetime(end) + max_interval
 
         files1 = list(
-            self.find(start, end, filters=filters)
+            self.find(start, end, filters=filters, no_files_error=not(skip_file_errors)) #skip_file_errors added 22.02.2023
         )
         files2 = list(
-            other.find(start, end, filters=other_filters)
+            other.find(start, end, filters=other_filters, no_files_error=not(skip_file_errors)) #skip_file_errors added 22.02.2023
         )
-
+        '''
         # Convert the times (datetime objects) to seconds (integer)
         times1 = np.asarray([
             file.times
@@ -2118,7 +2150,9 @@ class FileSet:
             file.times
             for file in files2
         ]).astype("M8[s]").astype(int)
-
+        
+        if len(times1)==0 or len(times2)==0: #added 18.04.23
+            return
         if max_interval is not None:
             # Expand the intervals of the secondary fileset to close-in-time
             # intervals.
@@ -2700,8 +2734,8 @@ class FileSet:
         read_args = {**self.read_args, **read_args}
 
         if self.decompress:
-            with typhon.files.decompress(file_info.path, tmpdir=self.temp_dir)\
-                    as decompressed_path:
+            with typhon.files.decompress(file_info.path, tmpdir=self.temp_dir, target=Path(file_info.path).name+next(tempfile._get_candidate_names()))\
+                    as decompressed_path: # modified 14.02.2023
                 decompressed_file = file_info.copy()
                 decompressed_file.path = decompressed_path
                 data = self.handler.read(decompressed_file, **read_args)

@@ -667,12 +667,24 @@ class NetCDF4(FileHandler):
                 data = fh.read("filename.nc", fields=["temp", "lat", "lon"])
 
         """
+        
+        ### added 
+        """
+        if type(file_info)==list: # file_info is a typhon object, not simply a list; common_dimension is in kwargs;  file_info: TypeError: __str__ returned non-string (type list)
+            print('hello')
+            NetCDF4._read_from_list(file_info, fields, mapping, **kwargs) #??
+         """   
+              
+        
+        ###
+        
         self._ensure_local_filesystem(file_info)
         # xr.open_dataset does still not support loading all groups from a
         # file except a very cumbersome (and expensive) way by using the
         # parameter `group`. To avoid this, we load all groups and their
         # variables by using the netCDF4 directly and load them later into a
         # xarray dataset.
+        # May 2022: xr.open_dataset still not support loading all groups at once
 
         with netCDF4.Dataset(file_info.path, "r") as root:
             # xarray decode_cf scales, don't do it twice!
@@ -683,6 +695,29 @@ class NetCDF4(FileHandler):
             dataset = xr.decode_cf(dataset, **kwargs)
 
         return _xarray_rename_fields(dataset, mapping)
+    
+    
+    def read_from_list(self, file_info, fields=None, mapping=None, common_dimension=None, **kwargs): #added
+        if common_dimension is None:
+            raise ValueError("If file_info is given as a list, you have to provide common_dimension as additional parameter.")
+        
+        dataset=[]
+        for entry in file_info:
+            dataset.append(self.read(entry, fields, mapping, **kwargs))
+        return xr.concat(dataset,dim=common_dimension)
+    
+    """
+    def _read_from_list(file_info, fields=None, mapping=None, common_dimension=None, **kwargs): #added : common_dimension vorauss. noch bei read() eintragen
+        data=[]
+        if 'common_dimension' not in kwargs: #is None:#not in kwargs:
+            raise ValueError("If file_info is given as a list, you have to provide common_dimension as additional parameter.")
+            
+        for entry in file_info:
+            data.append(NetCDF4.read(entry, fields, mapping, **kwargs)) # self.read(....) funktioniert auch nicht
+        return xr.concat(data,dim=common_dimension)
+    """    
+        
+
 
     @staticmethod
     def _get_dimension_name(ds, group, path, dim):
