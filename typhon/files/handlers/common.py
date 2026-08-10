@@ -1,4 +1,4 @@
-from collections import defaultdict
+from collections import defaultdict, OrderedDict
 from copy import copy
 from datetime import datetime
 from functools import wraps
@@ -618,6 +618,39 @@ class HDF5(FileHandler):
         return _xarray_rename_fields(dataset, mapping)
 
 
+def _get_group_dimensions(group):
+    """Collect all dimensions visible to a netCDF4 group.
+
+    In current netCDF4 versions, ``group.dimensions`` returns only the
+    dimensions *defined* in the given group, not those inherited from its
+    ancestors. This restores the old behaviour by walking up the ``parent``
+    chain from ``group`` to the root and collecting every dimension into an
+    :class:`~collections.OrderedDict`.
+
+    Dimensions defined locally take precedence over same-named dimensions
+    defined in an ancestor group (local-first ordering), mirroring the
+    shadowing semantics the rest of the NetCDF4 handler relies on.
+
+    Args:
+        group: A :class:`netCDF4.Group` or :class:`netCDF4.Dataset` (root).
+
+    Returns:
+        An :class:`~collections.OrderedDict` mapping dimension names to
+        :class:`netCDF4.Dimension` objects, with local dimensions first.
+    """
+    dims = OrderedDict()
+    current = group
+    while current is not None:
+        for name, dim in current.dimensions.items():
+            if name not in dims:
+                dims[name] = dim
+        parent = getattr(current, "parent", None)
+        if parent is current or parent is None:
+            break
+        current = parent
+    return dims
+
+
 class NetCDF4(FileHandler):
     """File handler that can load / store xarray.Dataset from / to NetCDF4
 
@@ -685,7 +718,7 @@ class NetCDF4(FileHandler):
         return _xarray_rename_fields(dataset, mapping)
 
     @staticmethod
-    def _get_dimension_name(ds, group, path, dim):
+    def _get_dimension_name(ds, group, path, dim, group_dims):
         # If the dimension is defined in the subgroup, use NOT the one of the
         # parent group:
         if dim in group.variables or path == "":
@@ -706,7 +739,7 @@ class NetCDF4(FileHandler):
             ancestor_size = ds.sizes.get(ancestor_dim, None)
 
             if ancestor_size is not None \
-                    and group.dimensions[dim].size == ancestor_size:
+                    and group_dims[dim].size == ancestor_size:
                 # use the ancestor dimension:
                 return ancestor_dim
 
@@ -726,9 +759,15 @@ class NetCDF4(FileHandler):
         # group, then it is valid for this group only. Otherwise, the
         # dimension from the parent group is taken (if it suits with name and
         # size)
+        # In current netCDF4 versions, group.dimensions only returns the
+        # dimensions *defined* in this group, not those inherited from parent
+        # groups. We collect all visible dimensions (local + ancestors) so
+        # that variables using an inherited dimension are mapped correctly.
+        group_dims = _get_group_dimensions(group)
         dim_map = {
-            dim: NetCDF4._get_dimension_name(ds, group, path, dim)
-            for dim in group.dimensions
+            dim: NetCDF4._get_dimension_name(
+                ds, group, path, dim, group_dims)
+            for dim in group_dims
         }
 
         # Load variables:
