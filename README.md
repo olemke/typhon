@@ -6,7 +6,7 @@
 # typhon - Tools for atmospheric research
 
 ## Installation
-Typhon requires Python version 3.10 or higher. The recommended way to get Python
+Typhon requires Python version 3.12 or higher. The recommended way to get Python
 is through [Miniforge3]. But of course, any other Python distribution is also
 working.
 
