@@ -44,7 +44,7 @@ def integrate_column(y, x=None, axis=0):
     """Integrate array along an arbitrary axis.
 
     Note:
-        This function is just a wrapper for :func:`numpy.trapz`.
+        This function is just a wrapper for :func:`numpy.trapezoid`.
 
     Parameters:
         y (ndarray): Data array.
@@ -63,7 +63,7 @@ def integrate_column(y, x=None, axis=0):
         >>> integrate_column(y, x)
         2.0
     """
-    return np.trapz(y, x, axis=axis)
+    return np.trapezoid(y, x, axis=axis)
 
 
 def interpolate_halflevels(x, axis=0):

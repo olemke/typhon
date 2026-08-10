@@ -396,7 +396,7 @@ def match_color(spc_image, f_grid, normalization_constant=2.5, gamma=1 / 2.2):
     for color_idx in range(np.size(cie_kernels, axis=1)):
         cie_temp = cie_kernels[:, color_idx]
         int_kernel = i_image * cie_temp[np.newaxis, np.newaxis, :]
-        XYZ[:, :, color_idx] = -np.trapz(int_kernel, wavelength, axis=2)
+        XYZ[:, :, color_idx] = -np.trapezoid(int_kernel, wavelength, axis=2)
 
     # normalized luminosity
     normed_luminosity = XYZ[:, :, 1] / normalization_constant

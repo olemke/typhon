@@ -487,7 +487,7 @@ class QRNN:
             Array containing the posterior means for the provided inputs.
         """
         y_pred, qs = self.cdf(x)
-        mus = y_pred[:, -1] - np.trapz(qs, x=y_pred)
+        mus = y_pred[:, -1] - np.trapezoid(qs, x=y_pred)
         return mus
 
     @staticmethod
@@ -535,7 +535,7 @@ class QRNN:
         qs[0, 0] = 0.0
         qs[0, -1] = 1.0
 
-        return np.trapz((qs - ind)**2.0, y_cdf)
+        return np.trapezoid((qs - ind)**2.0, y_cdf)
 
     def evaluate_crps(self, x_test, y_test):
         r"""
