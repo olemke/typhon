@@ -151,7 +151,7 @@ def column_relative_humidity(q, p, t, axis=0):
         # ivws
         # t to es
         es = e_eq_mixed_mk(t)
-        es.shape = (dim)
+        es = es.reshape(dim)
         # es to qs 
         if len(dim) == 1:
             l = len(es)
