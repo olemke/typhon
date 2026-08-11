@@ -1,6 +1,4 @@
-{% set data = load_setup_py_data(setup_file='../../setup.py', from_recipe_dir=True) %}
 {% set name = "typhon" %}
-#{% set version = data['version'] %}
 {% set version = "0.11.0dev" %}
 {% set dev_url = "https://github.com/atmtools/typhon" %}
 
@@ -27,19 +25,30 @@ requirements:
     - setuptools >=3.4
   run:
     - python
-    {% for dep in data['install_requires'] %}
-    - {{ dep.lower() }}
-    {% endfor %}
+    - docutils
+    - fsspec!=2023.12.0,!=2023.12.1,!=2024.3.1
+    - h5netcdf
+    - imageio
+    - matplotlib>=1.4
+    - netcdf4>=1.1.1
+    - numexpr
+    - numpy>=2
+    - pandas
+    - scikit-image
+    - scikit-learn
+    - scipy>=1.6
+    - setuptools>=0.7.2
+    - xarray>=0.10.2
 
 test:
   imports:
     - typhon
 
 about:
-  home: {{ data['url'] }}
-  license: {{ data['license'] }}
+  home: {{ dev_url }}
+  license: MIT
   license_file: LICENSE
-  summary: {{ data['description'] }}
+  summary: "Typhon is a collection of tools for atmospheric research."
 
 extra:
   recipe-maintainers:
