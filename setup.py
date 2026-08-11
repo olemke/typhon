@@ -1,34 +1,17 @@
-"""Typhon is a collection of tools for atmospheric research.
+"""Minimal setup.py shim supplying the dynamic version to setuptools.
 
-Typhon provides:
-
-- reading and writing routines for ARTS XML files
-- an API to run and access ARTS through Python
-- conversion routines for various physical quantities
-- a tool kit to collocate different data sets (e.g. satellite, ship, ...)
-- different retrievals (e.g. QRNN, SPARE-ICE, ...)
-- a subset of the cmocean color maps
-- functions to calculate and analyse cloud masks
-- various plotting utility functions
-- functions for geodetic and geographical calculations
-- interface to the SRTM30 global elevation model
-- functions for cloudmask statistics
-- and much more...
-
-Further information on ARTS can be found on http://www.radiativetransfer.org/.
+All package metadata lives in pyproject.toml. This file only computes the
+version (mirroring typhon.__init__.py's VERSION-file read, with a
+git-describe fallback for dev builds) and passes it to setup(), which
+setuptools accepts because ``version`` is declared as dynamic.
 """
-
-import builtins
 import logging
 import subprocess
 from codecs import open
 from os.path import dirname, join
 
-from setuptools import setup, find_packages
+from setuptools import setup
 
-
-builtins.__TYPHON_SETUP__ = True
-DOCLINES = (__doc__ or "").split("\n")
 
 version = open(join(dirname(__file__), "typhon", "VERSION")).read().strip()
 
@@ -43,58 +26,12 @@ if "dev" in version:
             "using version from source"
         )
     else:
-        so = cp.stdout
         version = (
-            so.strip()
+            cp.stdout.strip()
             .decode("ascii")
             .lstrip("v")
             .replace("-", "+dev", 1)
             .replace("-", ".")
         )
 
-__version__ = version
-
-setup(
-    name="typhon",
-    author="The Typhon developers",
-    author_email="typhon.mi@lists.uni-hamburg.de",
-    version=__version__,
-    url="https://github.com/atmtools/typhon",
-    download_url="https://github.com/atmtools/typhon/tarball/v" + __version__,
-    packages=find_packages(),
-    license="MIT",
-    description=DOCLINES[0],
-    long_description="\n".join(DOCLINES[2:]),
-    classifiers=[
-        # See https://pypi.python.org/pypi?%3Aaction=list_classifiers
-        "Development Status :: 4 - Beta",
-        "Intended Audience :: Science/Research",
-        "Topic :: Scientific/Engineering :: Atmospheric Science",
-        "License :: OSI Approved :: MIT License",
-        "Programming Language :: Python :: 3.12",
-        "Programming Language :: Python :: 3.13",
-        "Programming Language :: Python :: 3.14",
-    ],
-    python_requires="~=3.12",
-    include_package_data=True,
-    install_requires=[
-        "docutils",
-        "fsspec!=2023.12.0,!=2023.12.1,!=2024.3.1",
-        "h5netcdf",
-        "imageio",
-        "matplotlib>=1.4",
-        "netCDF4>=1.1.1",
-        "numexpr",
-        "numpy>=2",
-        "pandas",
-        "scikit-image",
-        "scikit-learn",
-        "scipy>=1.6",
-        "setuptools>=0.7.2",
-        "xarray>=0.10.2",
-    ],
-    extras_require={
-        "docs": ["cartopy", "pint", "sphinx_rtd_theme"],
-        "tests": ["pytest", "pint"],
-    },
-)
+setup(version=version)
