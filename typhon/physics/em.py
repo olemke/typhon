@@ -162,7 +162,7 @@ def radiance2rayleighjeansTb(f, r):
 
 
 def snell(n1, n2, theta1):
-    """Calculates the angle of the transmitted wave, according to Snell's law.
+    r"""Calculates the angle of the transmitted wave, according to Snell's law.
 
     Snell's law for the case when both *n1* and *n2* have no imaginary part
     is found in all physics handbooks.
@@ -532,10 +532,10 @@ def landau_g_factor(x, j, s, l=None, gs=2, gl=1, case=None):
 
 
 def zeeman_splitting(gu, gl, mu, ml, H=1):
-    """ Zeeman splitting
+    r""" Zeeman splitting
 
     .. math::
-        \Delta f = \\frac{H\mu_b}{h}(g_um_u - g_lm_l),
+        \Delta f = \frac{H\mu_b}{h}(g_um_u - g_lm_l),
 
     where :math:`\mu_b` is the Bohr magneton and :math:`h` is the Planck
     constant.
@@ -562,10 +562,10 @@ def zeeman_splitting(gu, gl, mu, ml, H=1):
 
 
 def zeeman_strength(ju, jl, mu, ml):
-    """ Zeeman line strength
+    r""" Zeeman line strength
 
-    .. math:: \Delta S_{M_u,M_l} = C \\left(\\begin{array}{ccc} J_l & 1 & J_u
-                       \\\\ M_l & M_u-M_l&-M_u \\end{array}\\right)^2,
+    .. math:: \Delta S_{M_u,M_l} = C \left(\begin{array}{ccc} J_l & 1 & J_u
+                       \\ M_l & M_u-M_l&-M_u \end{array}\right)^2,
 
     where C is either 3/2 or 3/4 depending on in mu-ml is 0 or not.  In case
     the intent is to return many split lines, the size of either (jl, ju) or

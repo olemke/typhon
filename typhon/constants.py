@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Collection of physical constants and conversion factors.
+r"""Collection of physical constants and conversion factors.
 
 Physical constants
 ==================
