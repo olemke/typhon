@@ -1038,7 +1038,7 @@ class Collocator:
         # to use them as indices later.
         for dim in dims:
             if dim not in data.coords:
-                data[dim] = dim, np.arange(data.dims[dim])
+                data[dim] = dim, np.arange(data.sizes[dim])
 
         # We assume that coordinates must be unique! Otherwise, we would have
         # to use this ugly work-around:

@@ -19,7 +19,7 @@ __all__ = [
 
 
 def cantor_pairing(a, b, ):
-    """Create an unique number from two natural numbers
+    r"""Create an unique number from two natural numbers
 
     For more information about the Cantor pairing function, have a look at:
     https://en.wikipedia.org/wiki/Pairing_function
